@@ -53,7 +53,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: apache-iceberg-monitoring-${{ github.short_sha }}
+          tag_name: apache-iceberg-monitoring-${{ github.sha }}
           release_name: apache-iceberg-monitoring-${{ github.short_sha }}
           body: ${{ env.changelog }}
           draft: false
