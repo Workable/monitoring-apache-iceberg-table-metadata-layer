@@ -33,16 +33,21 @@ jobs:
           zip -r "../../../${zip_name}" .
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
-      - name: Generate changelog
+      - name: Generate changelog with commit links
         id: changelog
         run: |
+          repo_url="https://github.com/${{ github.repository }}"
           git fetch --prune --unshallow
           previous_tag=$(git tag --sort=-creatordate | tail -n 1)
           if [ -z "$previous_tag" ]; then
-            changelog=$(git log --pretty=format:"* %s")
+            range=""
           else
-            changelog=$(git log $previous_tag..HEAD --pretty=format:"* %s")
+            range="$previous_tag..HEAD"
           fi
+          changelog=""
+          while read -r hash message; do
+            changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
+          done < <(git log $range --pretty=format:"%H %s")
           echo "changelog<<EOF" >> $GITHUB_ENV
           echo "$changelog" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
