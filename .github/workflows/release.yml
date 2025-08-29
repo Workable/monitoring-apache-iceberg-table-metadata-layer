@@ -9,41 +9,62 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install AWS SAM CLI
+        run: pip install aws-sam-cli
 
       - name: Build with SAM
         run: sam build --use-container
 
       - name: Zip the contents
+        id: zip
         run: |
           commit_hash=$(git rev-parse --short HEAD)
-          zip -r apache-iceberg-monitoring-$commit_hash.zip .aws-sam/build/IcebergMetricsLambda/
+          zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
+          cd .aws-sam/build/IcebergMetricsLambda
+          zip -r "../../../${zip_name}" .
+          echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
-      - name: Get changelog
+      - name: Generate changelog
         id: changelog
         run: |
           git fetch --prune --unshallow
-          previous_release=$(git tag --sort=-creatordate | head -n 1)
-          changelog=$(git log $previous_release..HEAD --pretty=format:'* %s')
+          previous_tag=$(git tag --sort=-creatordate | tail -n 1)
+          if [ -z "$previous_tag" ]; then
+            changelog=$(git log --pretty=format:"* %s")
+          else
+            changelog=$(git log $previous_tag..HEAD --pretty=format:"* %s")
+          fi
           echo "changelog<<EOF" >> $GITHUB_ENV
           echo "$changelog" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create Release
         id: create_release
-        uses: ncipollo/release-action@v1
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag: "apache-iceberg-monitoring-${{ github.sha }}"
-          name: "apache-iceberg-monitoring-${{ github.sha }}"
+          tag_name: apache-iceberg-monitoring-${{ github.sha }}
+          release_name: apache-iceberg-monitoring-${{ github.sha }}
           body: ${{ env.changelog }}
           draft: false
           prerelease: false
 
       - name: Upload Release Asset
-        uses: ncipollo/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset: apache-iceberg-monitoring-${{ github.sha }}.zip
+          asset_path: ./${{ steps.zip.outputs.zip_name }}
+          asset_name: ${{ steps.zip.outputs.zip_name }}
+          asset_content_type: application/zip
