@@ -1,0 +1,48 @@
+name: Release Workflow
+
+on:
+  push:
+    branches:
+      - main-workable
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build with SAM
+        run: sam build --use-container
+
+      - name: Zip the contents
+        run: |
+          commit_hash=$(git rev-parse --short HEAD)
+          zip -r apache-iceberg-monitoring-$commit_hash.zip .aws-sam/build/IcebergMetricsLambda/
+
+      - name: Get changelog
+        id: changelog
+        run: |
+          git fetch --prune --unshallow
+          previous_release=$(git tag --sort=-creatordate | head -n 1)
+          changelog=$(git log $previous_release..HEAD --pretty=format:'* %s')
+          echo "changelog<<EOF" >> $GITHUB_ENV
+          echo "$changelog" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "apache-iceberg-monitoring-${{ github.sha }}"
+          name: "apache-iceberg-monitoring-${{ github.sha }}"
+          body: ${{ env.changelog }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: ncipollo/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset: apache-iceberg-monitoring-${{ github.sha }}.zip
