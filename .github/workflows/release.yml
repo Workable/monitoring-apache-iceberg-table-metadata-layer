@@ -27,9 +27,9 @@ jobs:
       - name: Zip the contents
         id: zip
         run: |
-          commit_hash=$(git rev-parse --short HEAD)
-          echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
-          zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
+          release_suffix=$(date -u +"%Y%m%d%H%M")
+          echo "release_suffix=${release_suffix}" >> $GITHUB_OUTPUT
+          zip_name="apache-iceberg-monitoring-${release_suffix}.zip"
           cd .aws-sam/build/IcebergMetricsLambda
           zip -r "../../../${zip_name}" .
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
@@ -58,8 +58,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Create the release
-          gh release create "apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}" \
-            --title "apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}" \
+          gh release create "apache-iceberg-monitoring-${{ steps.zip.outputs.release_suffix }}" \
+            --title "apache-iceberg-monitoring-${{ steps.zip.outputs.release_suffix }}" \
             --notes "${{ steps.changelog.outputs.changelog }}" \
             --target ${{ github.sha }} \
             ./${{ steps.zip.outputs.zip_name }}
