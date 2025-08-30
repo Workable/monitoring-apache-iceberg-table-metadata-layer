@@ -18,29 +18,20 @@ jobs:
         with:
           python-version: '3.x'
 
-      # - name: Install AWS SAM CLI
-      #   run: pip install aws-sam-cli
+      - name: Install AWS SAM CLI
+        run: pip install aws-sam-cli
 
-      # - name: Build with SAM
-      #   run: sam build --use-container
-
-      # - name: Zip the contents
-      #   id: zip
-      #   run: |
-      #     commit_hash=$(git rev-parse --short HEAD)
-      #     echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
-      #     zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
-      #     cd .aws-sam/build/IcebergMetricsLambda
-      #     zip -r "../../../${zip_name}" .
-      #     echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
+      - name: Build with SAM
+        run: sam build --use-container
 
       - name: Zip the contents
         id: zip
         run: |
+          commit_hash=$(git rev-parse --short HEAD)
+          echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
           zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
-          mkdir -p .aws-sam/build/IcebergMetricsLambda
           cd .aws-sam/build/IcebergMetricsLambda
-          touch "../../../${zip_name}"
+          zip -r "../../../${zip_name}" .
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog with commit links
@@ -54,14 +45,10 @@ jobs:
           else
             range="$previous_tag..HEAD"
           fi
-          git log $range --pretty=format:"%H %s"
-          echo ""
           changelog="Commit changes for **$range**:"$'\n'
           while read -r hash message; do
             changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
-            echo "processing...$hash $message\n"
           done < <(git log $range --pretty=format:"%H %s"; echo "")
-          echo "changelog: $changelog"
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$changelog" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
