@@ -62,4 +62,4 @@ jobs:
             --title "apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}" \
             --notes "${{ steps.changelog.outputs.changelog }}" \
             --target ${{ github.sha }} \
-            ./${{ steps.zip.outputs.zip_name }}q
+            ./${{ steps.zip.outputs.zip_name }}
