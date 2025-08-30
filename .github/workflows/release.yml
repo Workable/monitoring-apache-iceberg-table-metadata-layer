@@ -39,13 +39,13 @@ jobs:
         run: |
           repo_url="https://github.com/${{ github.repository }}"
           git fetch --prune --unshallow
-          previous_tag=$(git tag --sort=-creatordate | tail -n 1)
+          previous_tag=$(git tag --sort=-creatordate | head -n 1)
           if [ -z "$previous_tag" ]; then
             range=""
           else
             range="$previous_tag..HEAD"
           fi
-          changelog="Commit changes for **$range**: \n"
+          changelog="Commit changes for **$range**:"$'\n'
           while read -r hash message; do
             changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
           done < <(git log $range --pretty=format:"%H %s")
