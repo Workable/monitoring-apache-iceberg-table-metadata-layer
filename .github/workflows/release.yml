@@ -49,28 +49,17 @@ jobs:
           while read -r hash message; do
             changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
           done < <(git log $range --pretty=format:"%H %s")
-          echo "changelog<<EOF" >> $GITHUB_ENV
-          echo "$changelog" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$changelog" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Create Release and Upload Asset (gh CLI)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: apache-iceberg-monitoring-${{ github.sha }}
-          release_name: apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}
-          body: ${{ env.changelog }}
-          draft: false
-          prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.zip.outputs.zip_name }}
-          asset_name: ${{ steps.zip.outputs.zip_name }}
-          asset_content_type: application/zip
+        run: |
+          # Create the release
+          gh release create "apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}" \
+            --title "apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}" \
+            --notes "${{ steps.changelog.outputs.changelog }}" \
+            --target ${{ github.sha }} \
+            ./${{ steps.zip.outputs.zip_name }}
