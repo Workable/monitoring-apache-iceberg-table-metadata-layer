@@ -57,7 +57,9 @@ jobs:
           changelog="Commit changes for **$range**:"$'\n'
           while read -r hash message; do
             changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
+            echo "processing...$hash $message"
           done < <(git log $range --pretty=format:"%H %s")
+          echo "changelog: $changelog"
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$changelog" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
