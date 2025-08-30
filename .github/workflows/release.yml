@@ -45,7 +45,7 @@ jobs:
           else
             range="$previous_tag..HEAD"
           fi
-          changelog="Commit changes for **${{ range }}**: \n"
+          changelog="Commit changes for **$range**: \n"
           while read -r hash message; do
             changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
           done < <(git log $range --pretty=format:"%H %s")
