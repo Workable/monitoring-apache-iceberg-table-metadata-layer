@@ -38,6 +38,7 @@ jobs:
         id: zip
         run: |
           zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
+          mkdir -p .aws-sam/build/IcebergMetricsLambda
           cd .aws-sam/build/IcebergMetricsLambda
           touch "../../../${zip_name}"
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
