@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,6 +28,7 @@ jobs:
         id: zip
         run: |
           commit_hash=$(git rev-parse --short HEAD)
+          echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
           zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
           cd .aws-sam/build/IcebergMetricsLambda
           zip -r "../../../${zip_name}" .
@@ -59,7 +60,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: apache-iceberg-monitoring-${{ github.sha }}
-          release_name: apache-iceberg-monitoring-${{ github.short_sha }}
+          release_name: apache-iceberg-monitoring-${{ steps.zip.outputs.commit_hash }}
           body: ${{ env.changelog }}
           draft: false
           prerelease: false
