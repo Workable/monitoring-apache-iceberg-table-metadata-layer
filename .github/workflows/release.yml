@@ -18,20 +18,28 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install AWS SAM CLI
-        run: pip install aws-sam-cli
+      # - name: Install AWS SAM CLI
+      #   run: pip install aws-sam-cli
 
-      - name: Build with SAM
-        run: sam build --use-container
+      # - name: Build with SAM
+      #   run: sam build --use-container
+
+      # - name: Zip the contents
+      #   id: zip
+      #   run: |
+      #     commit_hash=$(git rev-parse --short HEAD)
+      #     echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
+      #     zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
+      #     cd .aws-sam/build/IcebergMetricsLambda
+      #     zip -r "../../../${zip_name}" .
+      #     echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
       - name: Zip the contents
         id: zip
         run: |
-          commit_hash=$(git rev-parse --short HEAD)
-          echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
           zip_name="apache-iceberg-monitoring-${commit_hash}.zip"
           cd .aws-sam/build/IcebergMetricsLambda
-          zip -r "../../../${zip_name}" .
+          touch "../../../${zip_name}"
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog with commit links
