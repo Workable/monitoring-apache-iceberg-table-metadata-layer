@@ -34,32 +34,6 @@ jobs:
           zip -r "../../../${zip_name}" .
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
-      - name: Generate changelog with commit links
-        id: changelog
-        run: |
-          repo_url="https://github.com/${{ github.repository }}"
-          git fetch --prune --unshallow
-          previous_tag=$(git tag --sort=-creatordate | head -n 1)
-          current_sha=$(git rev-parse HEAD)
-          if [ -z "$previous_tag" ]; then
-            range=""
-            compare_url="${repo_url}/commit/${current_sha}"
-            changelog="Commit changes for [HEAD](${compare_url}):"$'\n'
-            log_range="HEAD"
-          else
-            range="${previous_tag}..${current_sha}"
-            display_range="${previous_tag}..HEAD"
-            compare_url="${repo_url}/compare/${previous_tag}...${current_sha}"
-            changelog="Commit changes for [${display_range}](${compare_url}):"$'\n'
-            log_range="${previous_tag}..${current_sha}"
-          fi
-          while read -r hash message; do
-            changelog="${changelog}* [${message}](${repo_url}/commit/${hash})"$'\n'
-          done < <(git log ${log_range} --pretty=format:"%H %s"; echo "")
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$changelog" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
       - name: Create Release and Upload Asset (gh CLI)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -67,6 +41,5 @@ jobs:
           # Create the release
           gh release create "apache-iceberg-monitoring-${{ steps.zip.outputs.release_suffix }}" \
             --title "apache-iceberg-monitoring-${{ steps.zip.outputs.release_suffix }}" \
-            --notes "${{ steps.changelog.outputs.changelog }}" \
             --target ${{ github.sha }} \
             ./${{ steps.zip.outputs.zip_name }}
