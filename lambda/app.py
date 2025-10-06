@@ -29,6 +29,20 @@ glue_session_tags = {
     "app": "monitor-iceberg"
 }
 
+CACHE_FILE_PATH = '/tmp/iceberg_monitoring_cache.json'
+
+
+def get_cache_expiry_hours():
+    """Get cache expiry hours from environment variable or default to 3."""
+    env_value = os.getenv('CACHE_EXPIRY_HOURS')
+    if env_value is not None:
+        try:
+            # Try to convert to float first, then to int to handle decimal values
+            return int(float(env_value))
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid CACHE_EXPIRY_HOURS value '{env_value}', using default of 3 hours")
+    return 3
+
 def send_custom_metric( metric_name, dimensions, value, unit, namespace, timestamp=None):
     """
     Send a custom metric to AWS CloudWatch.
@@ -326,27 +340,81 @@ def check_table_is_of_iceberg_format(event):
     except KeyError:
         logger.warning("check_table_is_of_iceberg_format() -> table_type is missing")
         return False
+
+
+def load_cache():
+    """Load cache from JSON file in /tmp/ directory."""
+    if os.path.exists(CACHE_FILE_PATH):
+        try:
+            with open(CACHE_FILE_PATH, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load cache file: {e}")
+    return {}
+
+
+def save_cache(cache):
+    """Save cache to JSON file in /tmp/ directory."""
+    try:
+        with open(CACHE_FILE_PATH, 'w') as f:
+            json.dump(cache, f)
+    except IOError as e:
+        logger.warning(f"Failed to save cache file: {e}")
+
+
+def should_skip_execution(database_name, table_name):
+    """Check if execution should be skipped based on cache."""
+    cache = load_cache()
+    cache_key = f"{database_name}.{table_name}"
+
+    if cache_key in cache:
+        last_execution_time = cache[cache_key]
+        current_time = time.time()
+        time_diff_hours = (current_time - last_execution_time) / 3600
+        cache_expiry_hours = get_cache_expiry_hours()
+
+        if time_diff_hours < cache_expiry_hours:
+            logger.info(f"Skipping execution for {cache_key}. Last execution was {time_diff_hours:.2f} hours ago (expiry: {cache_expiry_hours} hours).")
+            return True
+
+    return False
+
+
+def update_cache(database_name, table_name):
+    """Update cache with current execution time."""
+    cache = load_cache()
+    cache_key = f"{database_name}.{table_name}"
+    cache[cache_key] = time.time()
+    save_cache(cache)
     
 
 def lambda_handler(event, context):
     log_format = f"[{context.aws_request_id}:%(message)s"
     logging.basicConfig(format=log_format, level=logging.INFO)
-    
+
+    glue_db_name = event["detail"]["databaseName"]
+    glue_table_name = event["detail"]["tableName"]
+
+    # Check cache to see if we should skip execution
+    if should_skip_execution(glue_db_name, glue_table_name):
+        logger.info(f"Skipping metrics generation for {glue_db_name}.{glue_table_name} due to recent execution")
+        return
+
+    # Update cache with current execution time
+    update_cache(glue_db_name, glue_table_name)
+
     # Ensure Table is of Iceberg format.
     if not check_table_is_of_iceberg_format(event):
         logger.info("Table is not of Iceberg format, skipping metrics generation")
         return
-    
-    glue_db_name = event["detail"]["databaseName"]
-    glue_table_name =  event["detail"]["tableName"]
-    
+
     catalog = GlueCatalog(glue_db_name)
     table = catalog.load_table((glue_db_name, glue_table_name))
     logger.info(f"current snapshot id={table.metadata.current_snapshot_id}")
     snapshot = table.metadata.snapshot_by_id(table.metadata.current_snapshot_id)
     logger.info("Using glue IS to produce metrics")
     session_id = create_or_reuse_glue_session()
-    
+
     send_snapshot_metrics(glue_db_name, glue_table_name, table.metadata.current_snapshot_id, session_id)
     send_partition_metrics(glue_db_name, glue_table_name, snapshot,session_id)
     send_files_metrics(glue_db_name, glue_table_name, snapshot,session_id)
