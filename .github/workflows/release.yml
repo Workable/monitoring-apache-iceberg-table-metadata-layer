@@ -31,7 +31,7 @@ jobs:
           echo "release_suffix=${release_suffix}" >> $GITHUB_OUTPUT
           zip_name="apache-iceberg-monitoring-${release_suffix}.zip"
           cd .aws-sam/build/IcebergMetricsLambda
-          zip -r "../../../${zip_name}" .
+          zip -9 -r "../../../${zip_name}" .
           echo "zip_name=${zip_name}" >> $GITHUB_OUTPUT
 
       - name: Create Release and Upload Asset (gh CLI)
