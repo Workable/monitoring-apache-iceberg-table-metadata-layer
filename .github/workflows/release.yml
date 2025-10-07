@@ -31,10 +31,6 @@ jobs:
           echo "release_suffix=${release_suffix}" >> $GITHUB_OUTPUT
           zip_name="apache-iceberg-monitoring-${release_suffix}.zip"
           cd .aws-sam/build/IcebergMetricsLambda
-          find . -name "*.pyc" -delete
-          find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-          find . -name "*.dist-info" -type d -exec rm -rf {} + 2>/dev/null || true
-          find . -name "*.egg-info" -type d -exec rm -rf {} + 2>/dev/null || true
           find . -name "tests" -type d -exec rm -rf {} + 2>/dev/null || true
           find . -name "*.so" -exec strip {} \; 2>/dev/null || true
           zip -9 -r "../../../${zip_name}" .
