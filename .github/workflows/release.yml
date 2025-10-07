@@ -16,13 +16,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install AWS SAM CLI
         run: pip install aws-sam-cli
 
       - name: Build with SAM
-        run: sam build --use-container
+        run: |
+          # Ensure we're using the correct platform for Lambda
+          export DOCKER_DEFAULT_PLATFORM=linux/amd64
+          sam build --use-container --build-image public.ecr.aws/sam/build-python3.12:latest
+          echo "Checking for compiled extensions..."
+          find .aws-sam/build -name "*.so" -exec file {} \;
 
       - name: Zip the contents
         id: zip
