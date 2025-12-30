@@ -330,10 +330,10 @@ def send_snapshot_metrics(glue_db_name, glue_table_name, snapshot_id, session_id
         ) 
 
 # check if glue table is of iceberg format, return boolean
-def check_table_is_of_iceberg_format(event):
+def check_table_is_of_iceberg_format(database_name, table_name):
     response = glue_client.get_table(
-        DatabaseName=event["detail"]["databaseName"],
-        Name=event["detail"]["tableName"],
+        DatabaseName=database_name,
+        Name=table_name,
     )
     try:
         return response["Table"]["Parameters"]["table_type"] == "ICEBERG"
@@ -386,15 +386,32 @@ def update_cache(database_name, table_name):
     cache_key = f"{database_name}.{table_name}"
     cache[cache_key] = time.time()
     save_cache(cache)
-    
 
-def lambda_handler(event, context):
-    log_format = f"[{context.aws_request_id}:%(message)s"
-    logging.basicConfig(format=log_format, level=logging.INFO)
 
-    glue_db_name = event["detail"]["databaseName"]
-    glue_table_name = event["detail"]["tableName"]
+def get_iceberg_tables_from_database(database_name):
+    """Get all Iceberg tables from a Glue database."""
+    iceberg_tables = []
+    next_token = None
 
+    while True:
+        if next_token:
+            response = glue_client.get_tables(DatabaseName=database_name, NextToken=next_token)
+        else:
+            response = glue_client.get_tables(DatabaseName=database_name)
+
+        for table in response['TableList']:
+            if check_table_is_of_iceberg_format(database_name, table['Name']):
+                iceberg_tables.append(table['Name'])
+
+        next_token = response.get('NextToken')
+        if not next_token:
+            break
+
+    return iceberg_tables
+
+
+def process_table_metrics(glue_db_name, glue_table_name):
+    """Process metrics for a single table."""
     # Check cache to see if we should skip execution
     if should_skip_execution(glue_db_name, glue_table_name):
         logger.info(f"Skipping metrics generation for {glue_db_name}.{glue_table_name} due to recent execution")
@@ -402,11 +419,6 @@ def lambda_handler(event, context):
 
     # Update cache with current execution time
     update_cache(glue_db_name, glue_table_name)
-
-    # Ensure Table is of Iceberg format.
-    if not check_table_is_of_iceberg_format(event):
-        logger.info("Table is not of Iceberg format, skipping metrics generation")
-        return
 
     catalog = GlueCatalog(glue_db_name)
     table = catalog.load_table((glue_db_name, glue_table_name))
@@ -416,5 +428,45 @@ def lambda_handler(event, context):
     session_id = create_or_reuse_glue_session()
 
     send_snapshot_metrics(glue_db_name, glue_table_name, table.metadata.current_snapshot_id, session_id)
-    send_partition_metrics(glue_db_name, glue_table_name, snapshot,session_id)
-    send_files_metrics(glue_db_name, glue_table_name, snapshot,session_id)
+    send_partition_metrics(glue_db_name, glue_table_name, snapshot, session_id)
+    send_files_metrics(glue_db_name, glue_table_name, snapshot, session_id)
+
+
+def lambda_handler(event, context):
+    log_format = f"[{context.aws_request_id}:%(message)s"
+    logging.basicConfig(format=log_format, level=logging.INFO)
+
+    # Check if MONITORED_DBS environment variable is set
+    monitored_dbs = os.getenv('MONITORED_DBS')
+
+    if monitored_dbs:
+        # Parse comma-separated list of databases
+        database_names = [db.strip() for db in monitored_dbs.split(',') if db.strip()]
+        logger.info(f"MONITORED_DBS is set, processing databases: {database_names}")
+
+        for db_name in database_names:
+            logger.info(f"Processing database: {db_name}")
+            # Get all Iceberg tables from the database
+            iceberg_tables = get_iceberg_tables_from_database(db_name)
+            logger.info(f"Found {len(iceberg_tables)} Iceberg tables in database {db_name}: {iceberg_tables}")
+
+            # Process each table
+            for table_name in iceberg_tables:
+                logger.info(f"Processing table: {db_name}.{table_name}")
+                try:
+                    process_table_metrics(db_name, table_name)
+                except Exception as e:
+                    logger.error(f"Error processing table {db_name}.{table_name}: {str(e)}")
+                    continue
+    else:
+        # Original behavior: process single table from event
+        logger.info("MONITORED_DBS not set, processing single table from event")
+        glue_db_name = event["detail"]["databaseName"]
+        glue_table_name = event["detail"]["tableName"]
+
+        # Ensure Table is of Iceberg format.
+        if not check_table_is_of_iceberg_format(glue_db_name, glue_table_name):
+            logger.info("Table is not of Iceberg format, skipping metrics generation")
+            return
+
+        process_table_metrics(glue_db_name, glue_table_name)
