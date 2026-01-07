@@ -56,22 +56,39 @@ def send_custom_metric( metric_name, dimensions, value, unit, namespace, timesta
     """
     cloudwatch = boto3.client('cloudwatch')
 
+    # CloudWatch requires timestamps to be within the past 2 weeks (14 days)
+    TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000  # 14 days in milliseconds
+    current_time_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+    # If timestamp is provided and within 2 weeks, use it; otherwise use current time
+    if timestamp and (current_time_ms - timestamp) <= TWO_WEEKS_MS:
+        metric_data_timestamp = datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.utc)
+        logger.debug(f"Using provided timestamp for metric {metric_name}: {metric_data_timestamp}")
+    else:
+        metric_data_timestamp = datetime.now(timezone.utc)
+        if timestamp:
+            logger.warning(f"Provided timestamp for metric {metric_name} is too old ({datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.utc)}), using current time instead")
+        else:
+            logger.debug(f"No timestamp provided for metric {metric_name}, using current time")
+
     metric_data = {
         'MetricName': metric_name,
         'Dimensions': dimensions,
         'Value': value,
-        'Unit': unit
+        'Unit': unit,
+        'Timestamp': metric_data_timestamp
     }
 
-    if timestamp:
-        metric_data['Timestamp'] = datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.utc)
-    else:
-        metric_data['Timestamp'] = datetime.now()
 
-    cloudwatch.put_metric_data(
-        Namespace=namespace,
-        MetricData=[metric_data]
-    )
+    try:
+        cloudwatch.put_metric_data(
+            Namespace=namespace,
+            MetricData=[metric_data]
+        )
+        logger.debug(f"Metric data sent successfully: {metric_data}")
+    except Exception as e:
+        logger.error(f"Failed to send metric to CloudWatch. Namespace: {namespace}, MetricData: {metric_data}, Error: {str(e)}")
+        raise
     
 def wait_for_session(session_id,interval=1):
     while True:
